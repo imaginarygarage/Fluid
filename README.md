@@ -27,11 +27,14 @@ This is a Lagrangian fluid simulation based on the paper by Simon Clavet, Philli
 
 Because this is a minimal bare metal environment, there is no heap and therefore we use Rust's nostd flag, so that only core platform-agnostic functionality is included. The crate is broken down into a few component modules:
 
-* ##### DMA I2C interface  
+##### DMA I2C interface
+
 I2C transmissions are handled via DMA. This interface consumes the I2C1 and DMA1 peripherals.
 
-* ##### OLED driver  
+##### OLED driver
+
 A driver for the OLED that utilizes the DMA I2C interface to communicate with the SSD1306 controller. This provides pixel control to the rest of the system.
 
-* ##### Fluid simulation  
+##### Fluid simulation
+
 A coarse, two-dimensional, particle-based fluid simulation. Currently operating 50 particles strong. Two major optimizations were necessary to get this working in real time on such a limited device:  fixed point arithmetic and roughly estimating vector magnitudes to avoid square root calculations.
