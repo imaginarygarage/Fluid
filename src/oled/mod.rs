@@ -90,11 +90,16 @@ impl OLEDDriver {
     pub fn clear(&self) {
         unsafe {
             let buffer = self.get_draw_buffer();
-            for (i, byte) in buffer.data.iter_mut().enumerate() {
-                if i % OLED_PAGE_SIZE > OLED_PAGE_HEADER_SIZE {
-                    *byte = 0;
+            for i in 0..buffer.data.len() {
+                if i % OLED_PAGE_SIZE >= OLED_PAGE_HEADER_SIZE {
+                    buffer.data[i] = 0;
                 }
             }
+            // for (i, byte) in buffer.data.iter_mut().enumerate() {
+            //     if i % OLED_PAGE_SIZE > OLED_PAGE_HEADER_SIZE {
+            //         *byte = 0;
+            //     }
+            // }
         }
     }
 
@@ -102,11 +107,16 @@ impl OLEDDriver {
     pub fn invert(&mut self) {
         unsafe {
             let buffer = self.get_draw_buffer();
-            for (i, byte) in buffer.data.iter_mut().enumerate() {
-                if i % OLED_PAGE_SIZE < OLED_PAGE_HEADER_SIZE {
-                    *byte = !(*byte);
+            for i in 0..buffer.data.len() {
+                if i % OLED_PAGE_SIZE > OLED_PAGE_HEADER_SIZE {
+                    buffer.data[i] = !buffer.data[i];
                 }
             }
+            // for (i, byte) in buffer.data.iter_mut().enumerate() {
+            //     if i % OLED_PAGE_SIZE < OLED_PAGE_HEADER_SIZE {
+            //         *byte = !(*byte);
+            //     }
+            // }
         }
     }
 
@@ -116,13 +126,20 @@ impl OLEDDriver {
             let buffer = self.get_draw_buffer();
             let row = y / 8;
             let bit = y % 8;
-            let byte = &mut buffer.data[row * OLED_PAGE_SIZE + OLED_PAGE_HEADER_SIZE + x];
+            let idx = row * OLED_PAGE_SIZE + OLED_PAGE_HEADER_SIZE + x;
             if on {
-                *byte |= 1 << bit;
+                buffer.data[idx] |= 1 << bit;
             }
             else {
-                *byte &= !(1 << bit);
+                buffer.data[idx] &= !(1 << bit);
             }
+            // let byte = &mut buffer.data[row * OLED_PAGE_SIZE + OLED_PAGE_HEADER_SIZE + x];
+            // if on {
+            //     *byte |= 1 << bit;
+            // }
+            // else {
+            //     *byte &= !(1 << bit);
+            // }
         }
     }
 

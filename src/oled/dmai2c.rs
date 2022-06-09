@@ -56,9 +56,17 @@ impl DMAi2c {
     /// Transmit some data. This blocks until tx is possible
     pub fn tx(data: &'static I2CBuffer) {
         // Wait until pending buffer is available
+        let mut count = 2;
         while DMAi2c::tx_in_progress() {
-            // TODO: consider delaying between calls to
-            //       allow interrupts to be serviced
+            // TODO: consider a more sophisticated delay
+            for i in 0..count {
+                count += -1 + 2 * (i % 2);
+            }
+            if count > 1_000_000_000 {
+                return;
+            }
+            count += 2;
+
         }
 
         //Move data ref to global mutex for DMA interrupt
@@ -67,7 +75,8 @@ impl DMAi2c {
         });
 
         // trigger the DMA interrupt to begin tx
-        cortex_m::peripheral::NVIC::pend(Interrupt::DMA1_CH2_3);
+        //cortex_m::peripheral::NVIC::pend(Interrupt::DMA1_CH2_3);
+        cortex_m::peripheral::NVIC::pend(Interrupt::DMA1_CH2_3_DMA2_CH1_2);
     }
 
     /// Determine if a transmission is in progress.
@@ -143,7 +152,8 @@ impl DMAi2c {
 
         // unmask the DMA transfer interrupt
         unsafe {
-            cortex_m::peripheral::NVIC::unmask(Interrupt::DMA1_CH2_3);
+            //cortex_m::peripheral::NVIC::unmask(Interrupt::DMA1_CH2_3);
+            cortex_m::peripheral::NVIC::unmask(Interrupt::DMA1_CH2_3_DMA2_CH1_2);
         }
     }
 
@@ -162,7 +172,7 @@ impl DMAi2c {
             // wait for i2c to be disabled
         }
 
-        // update the timing register for 600kHZ operation
+        // update the timing register for 400kHZ operation
         i2c.timingr.write(|w| w.scll().bits(26)   // SCL low period
                                .sclh().bits(20)   // SCL high period
                                .sdadel().bits(0)  // SDA delay
@@ -177,12 +187,13 @@ impl DMAi2c {
 
 
 #[interrupt]
-fn DMA1_CH2_3() {
+fn DMA1_CH2_3_DMA2_CH1_2() {
     // DMA I2C interface
     static mut dma_i2c: Option<DMAi2c> = None;
 
     //TODO:
     // if((DMA1 -> ISR) & DMA_ISR_TCIF2)	//only if the channel 2 transfer complete flag is set
+    //cortex_m::peripheral::NVIC::unpend(Interrupt::DMA1_CH2_3);
 
     // Take the DMA I2C interface if not already owned
     if dma_i2c.is_none() {
@@ -194,6 +205,9 @@ fn DMA1_CH2_3() {
     let mut tx_complete = false;
     if let Some(i2c) = dma_i2c {
         //TODO: move below to an I2C tx function
+        
+        // clear interrupt flag
+        i2c.dma.ifcr.write(|w| w.ctcif2().set_bit());
 
         // Get the data if not already acquired
         if i2c.tx_data.is_none() {

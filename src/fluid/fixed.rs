@@ -80,11 +80,20 @@ impl core::ops::Mul for FixedPt {
     }
 }
 
+impl core::ops::Mul<i32> for FixedPt {
+    type Output = Self;
+    fn mul(self, rhs: i32) -> Self {
+        FixedPt { 
+            value: (self.value >> Self::HALF_BASE) * (rhs << Self::HALF_BASE)
+        }
+    }
+}
+
 impl core::ops::Div for FixedPt {
     type Output = Self;
     fn div(self, rhs: Self) -> Self {
         FixedPt { 
-            value: (self.value << Self::HALF_BASE) / (rhs.value << Self::HALF_BASE)
+            value: ((self.value << Self::HALF_BASE) / rhs.value) << Self::HALF_BASE,
         }
     }
 }
@@ -106,16 +115,27 @@ pub struct FixedPtVec2D {
 }
 
 impl FixedPtVec2D {
-    // Floating point arithmetic is not supported in const fn, set value manually
+    // The value (sqrt(2) - 1) is used to approximate the magnitude of a vector. 
+    // Note: Floating point arithmetic is not supported in const fn, but it is
+    //       allowed in the definition of const values, so this value must be 
+    //       calculated here manually
+    // const SQRT_2_MINUS_1: FixedPt = FixedPt::from_f32(0.41421356);
     const SQRT_2_MINUS_1: FixedPt = FixedPt{ value: (0.41421356 * (1 << FixedPt::BASE) as f64) as i32 };
-    //const SQRT_2_MINUS_1: FixedPt = FixedPt::from_f32(0.41421356);
-    pub const ZERO: FixedPtVec2D = FixedPtVec2D { x: FixedPt::from_i8(0), y: FixedPt::from_i8(0) };
+
+    pub const ZERO: FixedPtVec2D = FixedPtVec2D::from_i8s(0, 0);
     pub const ORIGIN: FixedPtVec2D = FixedPtVec2D::ZERO;
 
-    pub fn from_i8s(x: i8, y: i8) -> Self {
+    pub const fn from_i8s(x: i8, y: i8) -> Self {
         Self { 
             x: FixedPt::from_i8(x), 
             y: FixedPt::from_i8(y)
+        }
+    }
+
+    pub fn from_f32s(x: f32, y: f32) -> Self {
+        Self { 
+            x: FixedPt::from_f32(x), 
+            y: FixedPt::from_f32(y)
         }
     }
 
@@ -133,6 +153,10 @@ impl FixedPtVec2D {
         let a = core::cmp::max(dx, dy);
         let b = core::cmp::min(dx, dy);
         a + b * Self::SQRT_2_MINUS_1
+    }
+
+    pub fn unit(&self) -> FixedPtVec2D {
+        *self / self.magnitude()
     }
 
     pub fn vector_to(&self, vector_2: &Self) -> Self {
@@ -233,6 +257,13 @@ impl FixedPtNearFar {
             near: FixedPt::from_f32(near), 
             far: FixedPt::from_f32(far)
         }
+    }
+}
+
+impl core::ops::AddAssign for FixedPtNearFar {
+    fn add_assign(&mut self, rhs: FixedPtNearFar) {
+        self.near += rhs.near;
+        self.far += rhs.far;
     }
 }
 

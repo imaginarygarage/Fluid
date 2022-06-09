@@ -7,8 +7,8 @@ pub struct Particle {
     position: FixedPtVec2D,
     previous_position: FixedPtVec2D,
     velocity: FixedPtVec2D,
-    pressure: FixedPtNearFar,
-    density: FixedPtNearFar,
+    pub pressure: FixedPtNearFar,
+    pub density: FixedPtNearFar,
 }
 
 impl Particle {
@@ -30,6 +30,16 @@ impl Particle {
         self.position.vector_to(&particle.position)
     }
 
+    /// The speed at which the particles are approaching one another is the
+    /// dot product of the difference in velocity between the two particles
+    /// and unit vector pointing from this particle to the other.
+    /// Otherwise referred to as the inward radial velocity.
+    pub fn approach_speed_of(&self, particle: &Self) -> FixedPt {
+        let direction = self.position.vector_to(&particle.position).unit();
+        let velocity_diff = particle.velocity.vector_to(&self.velocity);
+        velocity_diff.dot(&direction)
+    }
+
     pub fn get_display_position(&self) -> (i8, i8) {
         (self.position.x.to_i8(), self.position.y.to_i8())
     }
@@ -44,7 +54,7 @@ pub struct Fluid<const N: usize> {
     particles: [Particle; N],
     particle_interaction_radius: FixedPt,
     stiffness: FixedPtNearFar,
-    target_density: FixedPt,
+    pub target_density: FixedPt,
     viscosity: FixedPtViscosity, 
     gravity: FixedPtVec2D,
     x_max: FixedPt,
@@ -57,9 +67,9 @@ impl<const N: usize> Fluid<N> {
         let mut fluid = Fluid {
             particles: [Particle::new(0, 0); N],
             particle_interaction_radius: FixedPt::from_f32(16.0),
-            stiffness: FixedPtNearFar::from_f32s(3.0, 2.0),
-            target_density: FixedPt::from_f32(3.5),
-            viscosity: FixedPtViscosity::from_f32s(0.0, 0.05),
+            stiffness: FixedPtNearFar::from_f32s(4.0, 1.5),
+            target_density: FixedPt::from_f32(2.5),
+            viscosity: FixedPtViscosity::from_f32s(0.0, 0.10),
             gravity: FixedPtVec2D::from_i8s(0, 0),
             x_max: FixedPt::from_i8(width - 1),
             y_max: FixedPt::from_i8(height - 1),
@@ -99,6 +109,10 @@ impl<const N: usize> Fluid<N> {
         self.revise_velocity(dt);
     }
 
+    pub fn set_gravity(&mut self, gx: f32, gy: f32) {
+        self.gravity = FixedPtVec2D::from_f32s(gx, gy);
+    }
+
     pub fn particle_count(&self) -> usize {
         self.particles.len()
     }
@@ -119,16 +133,15 @@ impl<const N: usize> Fluid<N> {
             for j in (i + 1)..self.particle_count() {
                 let distance_vector = self.particles[i].vector_to(&self.particles[j]);
                 let distance = distance_vector.magnitude();
-                if distance < self.particle_interaction_radius {
+                if distance < self.particle_interaction_radius && distance > FixedPt::ZERO {
                     // get the unit vector pointing from this particle to the neighbor
                     let direction = distance_vector / distance;
-                    let relative_velocity = self.particles[j].vector_to(&self.particles[i]);
                     // calculate the inward radial velocity
-                    let irv = relative_velocity.dot(&direction);
+                    let irv = self.particles[i].approach_speed_of(&self.particles[j]);
                     if irv > FixedPt::ZERO {
-                        // apply linear and quadratic viscosity impulses
-                        let q = distance / self.particle_interaction_radius;
-                        let viscosity_impulse = direction * dt * (FixedPt::from_i8(1) - q) * (self.viscosity.sigma * irv + self.viscosity.beta * irv * irv);
+                        // apply the linear viscosity kernel and quadratic viscosity impulses
+                        let viscosity_kernel = FixedPt::from_i8(1) - distance / self.particle_interaction_radius;
+                        let viscosity_impulse = direction * viscosity_kernel * (self.viscosity.sigma * irv + self.viscosity.beta * irv * irv) * dt;
                         self.particles[i].velocity -= viscosity_impulse / 2;
                         self.particles[j].velocity += viscosity_impulse / 2;
                     }
@@ -157,33 +170,34 @@ impl<const N: usize> Fluid<N> {
                 }
                 let distance = self.particles[i].distance_to(&self.particles[j]);
                 if distance < self.particle_interaction_radius {
-                    let one_minus_q = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
-                    self.particles[i].density.far += one_minus_q * one_minus_q;
-                    self.particles[i].density.near += one_minus_q * one_minus_q * one_minus_q;
+                    let linear_kernel = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
+                    let density_contibution = FixedPtNearFar { 
+                        far: linear_kernel * linear_kernel, 
+                        near: linear_kernel * linear_kernel * linear_kernel,
+                    };
+                    self.particles[i].density += density_contibution;
                 }
             }
             // compute pressure and near pressure
             self.particles[i].pressure.far = self.stiffness.far * (self.particles[i].density.far - self.target_density);
             self.particles[i].pressure.near = self.stiffness.near * self.particles[i].density.near;
-            // apply displacement
-            let mut displacement = FixedPtVec2D::ZERO;
+            // apply pressure displacement
             for j in 0..self.particle_count() {
                 if i == j { 
                     continue;
                 }
                 let distance_vector = self.particles[i].vector_to(&self.particles[j]);
                 let distance = distance_vector.magnitude();
-                if distance < self.particle_interaction_radius {
-                    let one_minus_q = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
+                if distance < self.particle_interaction_radius && distance > FixedPt::ZERO {
                     let direction = distance_vector / distance;
                     let pnear = self.particles[i].pressure.near;
                     let pfar = self.particles[i].pressure.far;
-                    let pressure_impulse = direction * (pfar * one_minus_q + pnear * one_minus_q * one_minus_q) * dt * dt;
+                    let linear_kernel = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
+                    let pressure_impulse = direction * (pfar * linear_kernel + pnear * linear_kernel * linear_kernel) * dt * dt;
+                    self.particles[i].position -= pressure_impulse / 2;
                     self.particles[j].position += pressure_impulse / 2;
-                    displacement -= pressure_impulse / 2;
                 }
             }
-            self.particles[i].position += displacement;
         }
     }
 
