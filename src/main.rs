@@ -4,7 +4,7 @@
 
 use panic_halt as _;
 
-use cortex_m::{peripheral::syst::SystClkSource, Peripherals as CorePeripherals};
+use cortex_m::Peripherals as CorePeripherals;
 use cortex_m_rt::{entry, exception};
 use cortex_m_semihosting::syscall;
 use stm32f0xx_hal::{prelude::*, delay::Delay, pac::Peripherals as F0Peripherals};
@@ -18,7 +18,16 @@ use fluid::Fluid;
 
 #[entry]
 fn main() -> ! {
-    if let (Some(mut p), Some(cp)) = (F0Peripherals::take(), CorePeripherals::take()) {
+    if let (Some(mut p), Some(cp)) = (F0Peripherals::take(), CorePeripherals::take()) {        
+        // Enable the DMA and I2C clocks before freezing the RCC peripheral
+        // TODO: Ideally this would be handled in the OLED driver by passing 
+        //       a reference to the configured rcc value, similar to the I2C 
+        //       pins below. This may be possible once the DMA module is 
+        //       available in the stm32f0xx_hal crate.
+        p.RCC.ahbenr.modify(|_, w| w.dmaen().enabled());
+        p.RCC.cfgr3.modify(|_, w| w.i2c1sw().sysclk());
+        p.RCC.apb1enr.modify(|_, w| w.i2c1en().enabled());
+
         // configure the clock to a frequency of 48MHz using
         // the internal oscillator multiplied by the PLL
         let mut rcc = p.RCC.configure()
@@ -26,11 +35,11 @@ fn main() -> ! {
                            .freeze(&mut p.FLASH);
 
         // Configure systick as a delay source
-        let mut systick = cp.SYST;
+        let systick = cp.SYST;
         let mut delay = Delay::new(systick, &rcc);
 
         // Create the fluid simulation
-        let mut fluid_sim = Fluid::<50>::new(125, 61);
+        let mut fluid_sim = Fluid::<60>::new(125, 61);
 
         // Configure pins for I2C
         let gpiob = p.GPIOB.split(&mut rcc);
@@ -40,7 +49,9 @@ fn main() -> ! {
         });
 
         // Initialize and take the OLED display driver
-        let mut display = OLEDDriver::new(p.I2C1, p.DMA1, &mut rcc);
+        // Note: Delay for 100ms to ensure display has time to boot
+        delay.delay_ms(100_u8);
+        let mut display = OLEDDriver::new(p.I2C1, p.DMA1);
 
         // Transmit the initial frame and delay some amount
         // to allow the user to appreciate the intial state
@@ -52,6 +63,7 @@ fn main() -> ! {
         loop {
             // Step the simulation and draw the results
             fluid_sim.step();
+            display.clear();
             draw_particles(&mut display, &fluid_sim);
             display.tx_frame();
 

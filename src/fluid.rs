@@ -88,25 +88,25 @@ impl<const N: usize> Fluid<N> {
 
     pub fn step(&mut self) {
         //todo: do something better with this timestep
-        const dt: FixedPt = FixedPt{ value: (0.9 * (1 << FixedPt::BASE) as f32) as i32 };
+        const DT: FixedPt = FixedPt{ value: (0.9 * (1 << FixedPt::BASE) as f32) as i32 };
 
         // apply gravity to each particle
-        self.apply_gravity(dt);
+        self.apply_gravity(DT);
 
         // apply viscosity
-        self.apply_viscosity(dt);
+        self.apply_viscosity(DT);
 
         // update positions based on current velocity
-        self.apply_velocity(dt);
+        self.apply_velocity(DT);
 
         // double density relaxation
-        self.double_density_relaxation(dt);
+        self.double_density_relaxation(DT);
 
         // resolve collisions
         self.resolve_collisions();
 
         // revise velocity based on final positions
-        self.revise_velocity(dt);
+        self.revise_velocity(DT);
     }
 
     pub fn set_gravity(&mut self, gx: f32, gy: f32) {
@@ -161,8 +161,7 @@ impl<const N: usize> Fluid<N> {
     fn double_density_relaxation(&mut self, dt: FixedPt) {
         for i in 0..self.particle_count() {
             // reset density
-            self.particles[i].density.near = FixedPt::ZERO;
-            self.particles[i].density.far = FixedPt::ZERO;
+            self.particles[i].density = FixedPtNearFar::ZERO;
             // compute density and near density
             for j in 0..self.particle_count() {
                 if i == j { 
@@ -171,9 +170,11 @@ impl<const N: usize> Fluid<N> {
                 let distance = self.particles[i].distance_to(&self.particles[j]);
                 if distance < self.particle_interaction_radius {
                     let linear_kernel = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
-                    let density_contibution = FixedPtNearFar { 
-                        far: linear_kernel * linear_kernel, 
-                        near: linear_kernel * linear_kernel * linear_kernel,
+                    let quadratic_kernel = linear_kernel * linear_kernel;
+                    let cubic_kernel = quadratic_kernel * linear_kernel;
+                    let density_contibution = FixedPtNearFar {  
+                        near: cubic_kernel,
+                        far: quadratic_kernel,
                     };
                     self.particles[i].density += density_contibution;
                 }
@@ -181,7 +182,7 @@ impl<const N: usize> Fluid<N> {
             // compute pressure and near pressure
             self.particles[i].pressure.far = self.stiffness.far * (self.particles[i].density.far - self.target_density);
             self.particles[i].pressure.near = self.stiffness.near * self.particles[i].density.near;
-            // apply pressure displacement
+            // apply pressure impulse between neighboring particles
             for j in 0..self.particle_count() {
                 if i == j { 
                     continue;
@@ -193,7 +194,8 @@ impl<const N: usize> Fluid<N> {
                     let pnear = self.particles[i].pressure.near;
                     let pfar = self.particles[i].pressure.far;
                     let linear_kernel = (self.particle_interaction_radius - distance) / self.particle_interaction_radius;
-                    let pressure_impulse = direction * (pfar * linear_kernel + pnear * linear_kernel * linear_kernel) * dt * dt;
+                    let quadratic_kernel = linear_kernel * linear_kernel;
+                    let pressure_impulse = direction * (pfar * linear_kernel + pnear * quadratic_kernel) * dt * dt;
                     self.particles[i].position -= pressure_impulse / 2;
                     self.particles[j].position += pressure_impulse / 2;
                 }
@@ -203,18 +205,17 @@ impl<const N: usize> Fluid<N> {
 
     fn resolve_collisions(&mut self) {
         for particle in self.particles.iter_mut() {
-            if particle.position.x < FixedPt::ZERO {
-                particle.position.x = FixedPt::ZERO;
-            }
-            else if particle.position.x > self.x_max {
-                particle.position.x = self.x_max;
-            }
-            if particle.position.y < FixedPt::ZERO {
-                particle.position.y = FixedPt::ZERO;
-            }
-            else if particle.position.y > self.y_max {
-                particle.position.y = self.y_max;
-            }
+            // Ensure particles stay within defined boundaries
+            particle.position.x = match particle.position.x {
+                x if x < FixedPt::ZERO => FixedPt::ZERO,
+                x if x > self.x_max => self.x_max,
+                x => x,
+            };
+            particle.position.y = match particle.position.y {
+                y if y < FixedPt::ZERO => FixedPt::ZERO,
+                y if y > self.y_max => self.y_max,
+                y => y,
+            };
         }
     }
 
@@ -226,72 +227,72 @@ impl<const N: usize> Fluid<N> {
 
     const PARTICLE_POSITIONS_INIT: [(i8, i8); 86] = [
         // F
-        ( 5, 11),
-        ( 5, 17),
-        ( 5, 23),
-        ( 5, 29),
-        (11, 17),
-        (11, 29),
-        (17, 29),
+        ( 0, 17),
+        ( 0, 23),
+        ( 0, 29),
+        ( 0, 35),
+        ( 6, 23),
+        ( 6, 35),
+        (12, 35),
         // L
-        (23, 11),
-        (23, 17),
-        (23, 23),
-        (23, 29),
-        (29, 11),
-        (35, 11),
+        (21, 17),
+        (21, 23),
+        (21, 29),
+        (21, 35),
+        (27, 17),
+        (33, 17),
         // U
-        (41, 11),
-        (41, 17),
-        (41, 23),
-        (41, 29),
-        (47, 11),
-        (53, 11),
-        (53, 17),
-        (53, 23),
-        (53, 29),
+        (42, 17),
+        (42, 23),
+        (42, 29),
+        (42, 35),
+        (48, 17),
+        (54, 17),
+        (54, 23),
+        (54, 29),
+        (54, 35),
         // I
-        (59, 11),
-        (59, 29),
-        (65, 11),
-        (65, 17),
-        (65, 23),
-        (65, 29),
-        (71, 11),
-        (71, 29),
+        (63, 17),
+        (63, 35),
+        (69, 17),
+        (69, 23),
+        (69, 29),
+        (69, 35),
+        (75, 17),
+        (75, 35),
         // D
-        (77, 11),
-        (77, 17),
-        (77, 23),
-        (77, 29),
-        (83, 11),
-        (83, 29),
-        (89, 17),
-        (89, 23),
+        (84, 17),
+        (84, 23),
+        (84, 29),
+        (84, 35),
+        (90, 17),
+        (90, 35),
+        (96, 23),
+        (96, 29),
         // [Drop]
-	    ( 95, 14),
-	    ( 95, 20),
-	    ( 98,  8),
-	    ( 98, 26),
-	    (101, 32),
-	    (104,  5),
-	    (104, 38),
-	    (107, 32),
-	    (110,  8),
-	    (110, 26),
-	    (113, 14),
-	    (113, 20),
+	    (105, 14),
+	    (105, 20),
+	    (108,  8),
+	    (108, 26),
+	    (111, 32),
+	    (114,  5),
+	    (114, 38),
+	    (117, 32),
+	    (120,  8),
+	    (120, 26),
+	    (123, 14),
+	    (123, 20),
         // overflow rows
-	    (29, 44),
-	    (35, 44),
-	    (41, 44),
-	    (47, 44),
-	    (53, 44),
-	    (59, 44),
-	    (65, 44),
-	    (71, 44),
-	    (77, 44),
-	    (83, 44),
+	    (  3, 5),
+	    ( 13, 5),
+	    ( 23, 5),
+	    ( 33, 5),
+	    ( 43, 5),
+	    ( 53, 5),
+	    ( 63, 5),
+	    ( 73, 5),
+	    ( 83, 5),
+	    ( 93, 5),
 	    (89, 44),
 	    (95, 44),
 	    (29, 50),

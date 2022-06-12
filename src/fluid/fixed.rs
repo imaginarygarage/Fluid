@@ -118,7 +118,7 @@ impl FixedPtVec2D {
     // The value (sqrt(2) - 1) is used to approximate the magnitude of a vector. 
     // Note: Floating point arithmetic is not supported in const fn, but it is
     //       allowed in the definition of const values, so this value must be 
-    //       calculated here manually
+    //       calculated here manually.
     // const SQRT_2_MINUS_1: FixedPt = FixedPt::from_f32(0.41421356);
     const SQRT_2_MINUS_1: FixedPt = FixedPt{ value: (0.41421356 * (1 << FixedPt::BASE) as f64) as i32 };
 
@@ -163,14 +163,6 @@ impl FixedPtVec2D {
         Self { 
             x: vector_2.x - self.x, 
             y: vector_2.y - self.y, 
-        }
-    }
-
-    pub fn as_unit_vector(&self) -> Self {
-        let magnitude = Self::ORIGIN.distance_to(self);
-        Self { 
-            x: self.x / magnitude, 
-            y: self.y / magnitude, 
         }
     }
 }
@@ -246,7 +238,9 @@ pub struct FixedPtNearFar {
 }
 
 impl FixedPtNearFar {
-    pub fn from_i8s(near: i8, far: i8) -> Self {
+    pub const ZERO: Self = Self::from_i8s(0, 0);
+
+    pub const fn from_i8s(near: i8, far: i8) -> Self {
         Self { 
             near: FixedPt::from_i8(near), 
             far: FixedPt::from_i8(far)
