@@ -122,9 +122,6 @@ impl FixedPtVec2D {
     // const SQRT_2_MINUS_1: FixedPt = FixedPt::from_f32(0.41421356);
     const SQRT_2_MINUS_1: FixedPt = FixedPt{ value: (0.41421356 * (1 << FixedPt::BASE) as f64) as i32 };
 
-    pub const ZERO: FixedPtVec2D = FixedPtVec2D::from_i8s(0, 0);
-    pub const ORIGIN: FixedPtVec2D = FixedPtVec2D::ZERO;
-
     pub const fn from_i8s(x: i8, y: i8) -> Self {
         Self { 
             x: FixedPt::from_i8(x), 
@@ -268,12 +265,14 @@ pub struct FixedPtViscosity {
 }
 
 impl FixedPtViscosity {
+    #[allow(dead_code)]
     pub fn from_i8s(sigma: i8, beta: i8) -> Self {
         Self { 
             sigma: FixedPt::from_i8(sigma), 
             beta: FixedPt::from_i8(beta)
         }
     }
+
     pub fn from_f32s(sigma: f32, beta: f32) -> Self {
         Self { 
             sigma: FixedPt::from_f32(sigma), 

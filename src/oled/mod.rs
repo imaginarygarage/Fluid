@@ -88,6 +88,7 @@ impl OLEDDriver {
     }
 
     /// Invert the OLED buffer
+    #[allow(dead_code)]
     pub fn invert(&mut self) {
         while self.tx_active() {
             // wait for frame transmission to complete before 
