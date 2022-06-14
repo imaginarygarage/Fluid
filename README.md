@@ -1,6 +1,6 @@
 # Fluid
+#### _A resource-constrained particle-based fluid simulation in Rust_  
 [![Build Status](http://imaginarygarage.com/builds/Fluid/build_status.png?)](https://github.com/imaginarygarage/fluid)
-#### _A resource-constrained particle-based fluid simulation in Rust_
 
 The goal of this project is to run a coarse, two dimensional, particle-based fluid simulation on an STM32F030K6 with only 4kb of RAM, and render the action to a small 128x64 monochrome OLED display at 30fps. 
 
