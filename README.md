@@ -1,4 +1,5 @@
 # Fluid
+[![Build Status](http://imaginarygarage.com/builds/Fluid/build_status.png)](https://github.com/imaginarygarage/fluid)
 #### _A resource-constrained particle-based fluid simulation in Rust_
 
 The goal of this project is to run a coarse, two dimensional, particle-based fluid simulation on an STM32F030K6 with only 4kb of RAM, and render the action to a small 128x64 monochrome OLED display at 30fps. 
@@ -15,13 +16,13 @@ This is a Lagrangian fluid simulation based on the paper by Simon Clavet, Philli
  
  ## The display
  
- The display is a 128x64 pixel monochromatic OLED display driven by an SSD1306 controller. The display hardware is configured for I2C communication. Due to the monochromatic nature of the display, 8 pixels can be addressed by a single byte, which means that each frame can be represented in 1024 bytes. Including the overhead of I2C communication and inter-device communication, each frame transmission ultimately consists of 1080 bytes. With a goal of 30 frames per second, a minimum transmission frequency of roughly 300KHz is required, which is readily satisfied by the 400KHz fast-mode. Transmissions are handled via DMA to allow the processor to focus on simulating and drawing the fluid.
+ The display is a 128x64 pixel monochromatic OLED display driven by an SSD1306 controller. The display hardware is configured for I2C communication. Due to the monochromatic nature of the display, 8 pixels can be addressed by a single byte, which means that each frame can be represented in 1024 bytes. Including the overhead of I2C communication and inter-device communication, each frame transmission ultimately consists of 1080 bytes. With a goal of 30 frames per second, a minimum transmission frequency of roughly 300KHz is required, which is readily satisfied by the 400KHz fast-mode of I2C. Transmissions are handled via DMA to allow the processor to focus on simulating and drawing the fluid.
  
  ## The microcontroller
  
- An STM32F030K6 is the ultimate target for this project. With only 32kb of Flash, 4kb of RAM, a maximum clock of 48MHz, and no FPU, there's a little extra work necessary to make sure that resources are used wisely. 
+ The STM32F030K6. With only 4kb of RAM, a maximum clock of 48MHz, and no FPU, there's a little extra work necessary to make sure that the limited resources are used wisely. 
  
- Current testing utilizes an STM32F051R8 because it is available on the STM32F0Discovery board that I had lying around. This is a functionally similar MCU with 64kb Flash and 8kb RAM.
+ Note: the binary produced by this project will work on an STM32F0Discovery as well, as the STM32F051R8 is sufficiently similar to the target chip.
  
  ## The software
 
@@ -37,4 +38,4 @@ A driver for the OLED that utilizes the DMA I2C interface to communicate with th
 
 ##### Fluid simulation
 
-A coarse, two-dimensional, particle-based fluid simulation. Currently operating 50 particles strong. Two major optimizations were necessary to get this working in real time on such a limited device:  fixed point arithmetic and roughly estimating vector magnitudes to avoid square root calculations.
+A coarse, two-dimensional, particle-based fluid simulation, 60 particles strong and operating at just over 30 fps. Two optimizations were necessary to get this working in real time on such a limited device:  fixed point arithmetic and estimating vector magnitudes to avoid square root calculations.
